@@ -26,6 +26,12 @@ var POLL = 500;
 var CACHE_MS = 5000;
 var MAX_SCAN = 300;      // 单棵树最多收集节点数
 var HB_EVERY = 60000;
+var HTTP_TO = 4000;      // HTTP 超时(ms)：PC 不在线时快速失败，不卡住本地定时
+
+// 本地自动上滑：true = 手机自己定时上滑，完全不依赖 PC/网络
+var LOCAL_AUTO = true;
+var LOCAL_MIN = 3;       // 最短间隔（秒）
+var LOCAL_MAX = 10;      // 最长间隔（秒）
 
 // 用于定位树根的种子文字（哪个存在用哪个）
 var SEEDS = ["我", "首页", "精选", "同城", "关注", "推荐", "发现", "消息", "朋友", "直播"];
@@ -36,7 +42,8 @@ function httpText(path) {
     try {
         var sep = (path.indexOf("?") >= 0) ? "&" : "?";
         r = http.get(PC + path + sep + "_t=" + Date.now(), {
-            headers: { "Cache-Control": "no-cache" }
+            headers: { "Cache-Control": "no-cache" },
+            timeout: HTTP_TO
         });
         if (!r || r.statusCode !== 200) return null;
         return r.body.string();
@@ -49,7 +56,8 @@ function httpText(path) {
 function ack(msg) {
     try {
         http.post(PC + "/ack", msg, {
-            headers: { "Content-Type": "text/plain; charset=utf-8" }
+            headers: { "Content-Type": "text/plain; charset=utf-8" },
+            timeout: HTTP_TO
         });
     } catch (e) {}
     console.log(msg.substring(0, 160));
@@ -396,6 +404,8 @@ ack("上线 v3.1.1 脚本=remote_ctl_kuaishou_v3_20261029.js");
 // ==================== 主循环 ====================
 var lastHb = Date.now();
 var loopCount = 0;
+var lastLocal = Date.now();
+var nextGap = (LOCAL_MIN + Math.floor(Math.random() * (LOCAL_MAX - LOCAL_MIN + 1))) * 1000;
 
 while (!stopped) {
     loopCount++;
@@ -404,6 +414,16 @@ while (!stopped) {
             lastHb = Date.now();
             ack("hb v3.1 循环=" + loopCount + " 前台=" + foregroundPkg());
         }
+
+        // 本地定时上滑：不依赖 PC，断网/异地照样刷
+        if (LOCAL_AUTO && Date.now() - lastLocal >= nextGap) {
+            lastLocal = Date.now();
+            nextGap = (LOCAL_MIN + Math.floor(Math.random() * (LOCAL_MAX - LOCAL_MIN + 1))) * 1000;
+            var lres = "";
+            try { lres = tryScroll(true); } catch (eL) { lres = "异常:" + eL; }
+            ack("本地自动 => " + lres);
+        }
+
         var body = httpText("/cmd");
         if (body) {
             var obj = null;

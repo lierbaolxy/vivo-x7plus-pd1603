@@ -10,7 +10,7 @@ PC 端网页/命令行下发指令，手机端用 AutoJs 无障碍 `scrollForwar
 |---|---|
 | `phone_ctl_server.py` | PC 端 HTTP 服务：指令队列、自动上滑循环、回报日志 |
 | `ctl_x7plus.bat` | X7Plus 专用控制台（端口 **8001**，日志 `phone_ack_x7plus.log`） |
-| `remote_ctl_kuaishou_v3_x7plus_20261030.js` | 手机端 AutoJs 脚本（轮询指令 + 无障碍翻页） |
+| `remote_ctl_kuaishou_v3_x7plus_20261030.js` | 手机端 AutoJs 脚本（轮询指令 + 无障碍翻页 + 本地自动上滑） |
 
 ## 架构
 
@@ -67,6 +67,21 @@ ctl_x7plus.bat stop           # 停止
 ```
 
 脚本跑起来后会在服务端 `/info` 里显示「手机最近连接」为手机 IP。
+
+### 6. 手机本地自动上滑（v3.2，断网可用）
+
+手机脚本内置本地定时器，**不依赖 PC 和网络**，脚本一跑起来就自己按间隔上滑：
+
+| 变量（脚本第 31~34 行） | 默认 | 说明 |
+|---|---|---|
+| `LOCAL_AUTO` | `true` | `true` 手机本地自动上滑；`false` 只用 PC 下发指令 |
+| `LOCAL_MIN` | `3` | 最短间隔（秒） |
+| `LOCAL_MAX` | `10` | 最长间隔（秒） |
+| `HTTP_TO` | `4000` | HTTP 超时（ms），PC 不在线时快速失败，不卡住本地定时 |
+
+- 本地滑动同样走无障碍 `scrollForward()` + 页面指纹校验，失败会自动换候选容器
+- 每次本地滑动都会通过 `/ack` 回报「本地自动 => …」，PC 端 `status` 可看到
+- PC 在线时仍可随时用 `ctl_x7plus.bat` 下发手动指令，两者互不冲突
 
 ## 单一指令接口
 
